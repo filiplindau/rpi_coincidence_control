@@ -25,7 +25,7 @@ root.setLevel(logging.DEBUG)
 
 
 class RPiCoincidenceController(object):
-    def __init__(self, data_pins=None, mode_pin=32, strobe_pin=22, strobe_time=0.003):
+    def __init__(self, data_pins=None, mode_pin=32, strobe_pin=22, strobe_time=0.005):
         self.pin_dict = dict()
         if data_pins is None:
             self.pin_dict["d0"] = 29
@@ -129,3 +129,7 @@ class RPiCoincidenceController(object):
         with self.attr_lock:
             delay = self.delay
         return delay
+
+
+if __name__ == "__main__":
+    rpc = RPiCoincidenceController(strobe_time=0.1)
