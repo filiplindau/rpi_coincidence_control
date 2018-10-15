@@ -70,6 +70,8 @@ class RPiCoincidenceController(object):
             self.delay_array.append((np.unpackbits(np.uint8(d))[::-1] * self.delay_bin).sum())
         self.delay_array = np.array(self.delay_array)
 
+        self.init_gpio()
+
         self.attr_lock = threading.Lock()
 
         self.target = 0
@@ -79,7 +81,7 @@ class RPiCoincidenceController(object):
 
     def init_gpio(self):
         root.info("Initializing pins to OUTPUT")
-        gpio.setmode(gpio.board)
+        gpio.setmode(gpio.BOARD)
         for key, value in self.pin_dict.items():
             gpio.setup(value, gpio.OUT)
 
