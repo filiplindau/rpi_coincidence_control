@@ -74,8 +74,8 @@ class RPiCoincidenceController(object):
 
         self.target = 0
         self.delay = 0
-        self.write_bucket(self.target)
-        self.write_delay(self.delay)
+        # self.write_bucket(self.target)
+        # self.write_delay(self.delay)
 
     def init_gpio(self):
         root.info("Initializing pins to OUTPUT")
@@ -94,6 +94,7 @@ class RPiCoincidenceController(object):
         output_list = list(np.unpackbits(np.uint8(data))[::-1])
         output_list.append(mode)
         root.debug("Output: {0}".format(output_list))
+        root.debug("Pins: {0}".format(self.pin_list))
 
         gpio.output(self.pin_list, output_list)
         time.sleep(self.strobe_time)
