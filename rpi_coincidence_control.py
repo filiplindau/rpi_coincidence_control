@@ -93,7 +93,7 @@ class RPiCoincidenceController(object):
         #     output_list.append(data_shift & 1)
         #     data_shift >>= 1
 
-        output_list = list(np.unpackbits(np.uint8(data))[::-1])
+        output_list = list(np.unpackbits(np.uint8(data))[::-1].astype(int))
         output_list.append(mode)
         root.debug("Output: {0}".format(output_list))
         root.debug("Pins: {0}".format(self.pin_list))
