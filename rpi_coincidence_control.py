@@ -25,7 +25,7 @@ root.setLevel(logging.DEBUG)
 
 
 class RPiCoincidenceController(object):
-    def __init__(self, data_pins=None, mode_pin=32, strobe_pin=22, strobe_time=0.005):
+    def __init__(self, data_pins=None, mode_pin=32, laser_trig_pin=18, strobe_pin=22, strobe_time=0.005):
         self.pin_dict = dict()
         if data_pins is None:
             self.pin_dict["d0"] = 29
@@ -48,6 +48,7 @@ class RPiCoincidenceController(object):
 
         root.info("Using data pins: {0}".format(self.pin_dict))
         self.pin_dict["mode"] = mode_pin
+        self.pin_dict["laser_trig"] = laser_trig_pin
         self.pin_dict["strobe"] = strobe_pin
 
         self.pin_list = list()
@@ -76,8 +77,9 @@ class RPiCoincidenceController(object):
 
         self.target = 0
         self.delay = 0
-        # self.write_bucket(self.target)
-        # self.write_delay(self.delay)
+        self.laser_trig = 0
+        self.set_bucket(self.target)
+        self.set_delay(self.delay)
 
     def init_gpio(self):
         root.info("Initializing pins to OUTPUT")
@@ -104,7 +106,7 @@ class RPiCoincidenceController(object):
         time.sleep(self.strobe_time)
         gpio.output(self.pin_dict["strobe"], 0)
 
-    def write_bucket(self, target):
+    def set_bucket(self, target):
         root.info("Selecting bucket {0}".format(target))
         with self.attr_lock:
             self._write_byte(target, 0)
@@ -120,7 +122,7 @@ class RPiCoincidenceController(object):
         with self.attr_lock:
             self._write_byte(delay_bin, 1)
 
-    def write_delay(self, delay):
+    def set_delay(self, delay):
         ind = np.abs(self.delay_array-delay).argmin()
         delay_min = self.delay_array[ind]
         root.info("Wanted delay {0} ps. Closest possible: {1} ps".format(delay, delay_min))
@@ -132,6 +134,33 @@ class RPiCoincidenceController(object):
         with self.attr_lock:
             delay = self.delay
         return delay
+
+    def set_laser_trig(self, source="MRF"):
+        """
+        Set the source of the laser 20 Hz trig. It can be either MRF for normal triggering
+        or COINCIDENCE for coincidence triggering.
+
+        :param source: String MRF or COINCIDENCE
+        :return:
+        """
+        with self.attr_lock:
+            if "coinc" in source.lower():
+                root.info("Using COINCIDENCE triggering")
+                gpio.output(self.pin_dict["laser_trig"], 1)
+                self.laser_trig = 1
+            else:
+                # MRF triggering
+                root.info("Using MRF triggering")
+                gpio.output(self.pin_dict["laser_trig"], 0)
+                self.laser_trig = 0
+
+    def get_laser_trig(self):
+        with self.attr_lock:
+            trig = self.laser_trig
+        if trig == 0:
+            return "MRF"
+        else:
+            return "COINCIDENCE"
 
 
 if __name__ == "__main__":

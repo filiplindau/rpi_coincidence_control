@@ -41,8 +41,19 @@ class CoincidenceDS(Device):
                             fget="get_time_window",
                             fset="set_timewindow",
                             doc="Time window for coincidence to trigger",
-                            memorized=False,
+                            memorized=True,
                             hw_memorized=False)
+
+    laser_trig = attribute(label="Laser trigger source",
+                           dtype=str,
+                           access=pt.AttrWriteType.READ_WRITE,
+                           unit="",
+                           format="",
+                           fget="get_laser_trig",
+                           fset="set_laser_trig",
+                           doc="Select laser trigger source MRF or COINCIDENCE",
+                           memorized=True,
+                           hw_memorized=False)
 
     data_pins = device_property(dtype=pt.DevVarShortArray,
                                 doc="RPi pin numbers of the 8 data bits for FPGA transfer",
@@ -51,6 +62,10 @@ class CoincidenceDS(Device):
     mode_pin = device_property(dtype=int,
                                doc="RPi pin number of the mode bit for FPGA transfer",
                                default_value=32)
+
+    laser_trig_pin = device_property(dtype=int,
+                                     doc="RPi pin number of the laser trig source selector",
+                                     default_value=18)
 
     strobe_pin = device_property(dtype=int,
                                  doc="RPi pin number of the strobe for FPGA transfer",
@@ -83,7 +98,15 @@ class CoincidenceDS(Device):
 
     def set_time_window(self, new_window):
         self.debug_stream("In set_time_window: New time window {0} ps".format(new_window))
-        self.controller.write_delay(new_window)
+        self.controller.set_delay(new_window)
+
+    def get_laser_trig(self):
+        self.debug_stream("In get_laser_trig:")
+        return self.controller.get_laser_trig(), time.time(), pt.AttrQuality.ATTR_VALID
+
+    def set_laser_trig(self, trig_source):
+        self.debug_stream("In set_laser_trig: New trig source {0}".format(trig_source.upper()))
+        self.controller.set_laser_trig(trig_source)
 
 
 if __name__ == "__main__":
