@@ -29,7 +29,7 @@ class CoincidenceDS(Device):
                        fset="set_bucket",
                        doc="Target bucket to inject into",
                        memorized=True,
-                       hw_memorized=False)
+                       hw_memorized=True)
 
     time_window = attribute(label="Time window",
                             dtype=float,
@@ -38,11 +38,11 @@ class CoincidenceDS(Device):
                             format="%4.1f",
                             min_value=0.0,
                             max_value=2000.0,
-                            fget="get_time_window",
+                            fget="get_timewindow",
                             fset="set_timewindow",
                             doc="Time window for coincidence to trigger",
                             memorized=True,
-                            hw_memorized=False)
+                            hw_memorized=True)
 
     laser_trig = attribute(label="Laser trigger source",
                            dtype=str,
@@ -53,25 +53,21 @@ class CoincidenceDS(Device):
                            fset="set_laser_trig",
                            doc="Select laser trigger source MRF or COINCIDENCE",
                            memorized=True,
-                           hw_memorized=False)
+                           hw_memorized=True)
 
     data_pins = device_property(dtype=pt.DevVarShortArray,
                                 doc="RPi pin numbers of the 8 data bits for FPGA transfer",
                                 default_value=[29, 31, 33, 35, 37, 40, 38, 36])
 
-    mode_pin = device_property(dtype=int,
-                               doc="RPi pin number of the mode bit for FPGA transfer",
-                               default_value=32)
-
-    laser_trig_pin = device_property(dtype=int,
-                                     doc="RPi pin number of the laser trig source selector",
-                                     default_value=18)
+    mode_pins = device_property(dtype=int,
+                                doc="RPi pin numbers of the mode bits for FPGA transfer",
+                                default_value=[32, 22, 18, 16])
 
     strobe_pin = device_property(dtype=int,
                                  doc="RPi pin number of the strobe for FPGA transfer",
-                                 default_value=22)
+                                 default_value=12)
 
-    strobe_time = device_property(dtype=int,
+    strobe_time = device_property(dtype=float,
                                   doc="Time to assert new data with strobe signal (s)",
                                   default_value=0.005)
 
@@ -79,8 +75,12 @@ class CoincidenceDS(Device):
         self.debug_stream("In init_device:")
         Device.init_device(self)
 
-        self.controller = RPiCoincidenceController(self.data_pins, self.mode_pin,
-                                                   self.strobe_pin, self.strobe_time)
+        self.debug_stream("data_pins: {0}".format(self.data_pins))
+
+        self.controller = RPiCoincidenceController(data_pins=self.data_pins,
+                                                   mode_pins=self.mode_pins,
+                                                   strobe_pin=self.strobe_pin,
+                                                   strobe_time=self.strobe_time)
 
         self.set_state(pt.DevState.ON)
 
@@ -90,15 +90,15 @@ class CoincidenceDS(Device):
 
     def set_bucket(self, new_bucket):
         self.debug_stream("In set_bucket: New bucket " + str(new_bucket))
-        self.controller.write_target(new_bucket)
+        self.controller.set_bucket(new_bucket)
 
-    def get_time_window(self):
+    def get_timewindow(self):
         self.debug_stream("In get_time_window:")
-        return self.controller.get_delat(), time.time(), pt.AttrQuality.ATTR_VALID
+        return self.controller.get_window(), time.time(), pt.AttrQuality.ATTR_VALID
 
-    def set_time_window(self, new_window):
+    def set_timewindow(self, new_window):
         self.debug_stream("In set_time_window: New time window {0} ps".format(new_window))
-        self.controller.set_delay(new_window)
+        self.controller.set_window(new_window)
 
     def get_laser_trig(self):
         self.debug_stream("In get_laser_trig:")
