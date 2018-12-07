@@ -44,6 +44,20 @@ class CoincidenceDS(Device):
                             memorized=True,
                             hw_memorized=True)
 
+    delay_offset = attribute(label="Delay offset",
+                             dtype=float,
+                             access=pt.AttrWriteType.READ_WRITE,
+                             unit="ps",
+                             format="%4.1f",
+                             min_value=0.0,
+                             max_value=10000.0,
+                             fget="get_offset",
+                             fset="set_offset",
+                             doc="Delay time offset for coincidence generation, "
+                                 "set for ring bucket fill rate optimization",
+                             memorized=True,
+                             hw_memorized=True)
+
     laser_trig = attribute(label="Laser trigger source",
                            dtype=str,
                            access=pt.AttrWriteType.READ_WRITE,
@@ -54,6 +68,17 @@ class CoincidenceDS(Device):
                            doc="Select laser trigger source MRF or COINCIDENCE",
                            memorized=True,
                            hw_memorized=True)
+
+    ring_rf = attribute(label="Riing RF source",
+                        dtype=str,
+                        access=pt.AttrWriteType.READ_WRITE,
+                        unit="",
+                        format="",
+                        fget="get_ring_rf",
+                        fset="set_ring_rf",
+                        doc="Select ring RF source REV_CLOCK or 100MHZ",
+                        memorized=True,
+                        hw_memorized=True)
 
     data_pins = device_property(dtype=pt.DevVarShortArray,
                                 doc="RPi pin numbers of the 8 data bits for FPGA transfer",
@@ -108,6 +133,22 @@ class CoincidenceDS(Device):
         self.debug_stream("In set_laser_trig: New trig source {0}".format(trig_source.upper()))
         self.controller.set_laser_trig(trig_source)
 
+    def get_ring_rf(self):
+        self.debug_stream("In get_ring_rf:")
+        return self.controller.get_ring_rf_source(), time.time(), pt.AttrQuality.ATTR_VALID
+
+    def set_ring_rf(self, new_ring_rf):
+        self.debug_stream("In set_ring_rf: New RF {0}".format(new_ring_rf.upper()))
+        self.controller.set_ring_rf_source(new_ring_rf)
+
+    def get_offset(self):
+        self.debug_stream("In get_offset:")
+        return self.controller.get_offset(), time.time(), pt.AttrQuality.ATTR_VALID
+
+    def set_offset(self, new_offset):
+        self.debug_stream("In set_offset: New offset {0} ps".format(new_offset))
+        self.controller.set_offset(new_offset)
+        
 
 if __name__ == "__main__":
     pt.server.server_run((CoincidenceDS,))
