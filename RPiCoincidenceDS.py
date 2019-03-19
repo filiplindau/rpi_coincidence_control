@@ -136,7 +136,7 @@ class CoincidenceDS(Device):
         try:
             self.controller.set_bucket(new_bucket)
         except ValueError:
-            raise 
+            raise
 
     def get_timewindow(self):
         self.debug_stream("In get_time_window:")

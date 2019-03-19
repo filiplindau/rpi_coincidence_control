@@ -303,7 +303,7 @@ class RPiCoincidenceController(object):
                 root.error("Coarse offset {0} out of range, resulting offset {1}".format(offset_coarse, offset))
                 raise ValueError("Coarse offset {0} out of range, resulting offset {1}".format(offset_coarse, offset))
 
-            self._write_byte(offset_coarse, self.mode_dict["bucket"])
+            self._write_byte(offset, self.mode_dict["bucket"])
             self.offset_coarse = offset_coarse
 
     def get_offset_coarse(self):
