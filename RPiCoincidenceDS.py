@@ -44,19 +44,33 @@ class CoincidenceDS(Device):
                             memorized=True,
                             hw_memorized=True)
 
-    delay_offset = attribute(label="Delay offset",
-                             dtype=float,
-                             access=pt.AttrWriteType.READ_WRITE,
-                             unit="ps",
-                             format="%4.1f",
-                             min_value=0.0,
-                             max_value=10000.0,
-                             fget="get_offset",
-                             fset="set_offset",
-                             doc="Delay time offset for coincidence generation, "
-                                 "set for ring bucket fill rate optimization",
-                             memorized=True,
-                             hw_memorized=True)
+    delay_fine_offset = attribute(label="Delay fine offset",
+                                  dtype=int,
+                                  access=pt.AttrWriteType.READ_WRITE,
+                                  unit="taps",
+                                  format="%3d",
+                                  min_value=0,
+                                  max_value=255,
+                                  fget="get_offset_fine",
+                                  fset="set_offset_fine",
+                                  doc="Delay time offset for coincidence generation, "
+                                      "set for ring bucket fill rate optimization",
+                                  memorized=True,
+                                  hw_memorized=True)
+
+    delay_coarse_offset = attribute(label="Delay 2.5 ns steps",
+                                    dtype=int,
+                                    access=pt.AttrWriteType.READ_WRITE,
+                                    unit="2.5 ns steps",
+                                    format="%3d",
+                                    min_value=0,
+                                    max_value=255,
+                                    fget="get_offset_coarse",
+                                    fset="set_offset_coarse",
+                                    doc="Delay time offset for coincidence generation, "
+                                        "set for ring bucket fill rate optimization. Each step is 2.5 ns.",
+                                    memorized=True,
+                                    hw_memorized=True)
 
     laser_trig = attribute(label="Laser trigger source",
                            dtype=str,
@@ -69,7 +83,7 @@ class CoincidenceDS(Device):
                            memorized=True,
                            hw_memorized=True)
 
-    ring_rf = attribute(label="Riing RF source",
+    ring_rf = attribute(label="Ring RF source",
                         dtype=str,
                         access=pt.AttrWriteType.READ_WRITE,
                         unit="",
@@ -84,7 +98,7 @@ class CoincidenceDS(Device):
                                 doc="RPi pin numbers of the 8 data bits for FPGA transfer",
                                 default_value=[29, 31, 33, 35, 37, 40, 38, 36])
 
-    mode_pins = device_property(dtype=int,
+    mode_pins = device_property(dtype=pt.DevVarShortArray,
                                 doc="RPi pin numbers of the mode bits for FPGA transfer",
                                 default_value=[32, 22, 18, 16])
 
@@ -96,6 +110,10 @@ class CoincidenceDS(Device):
                                   doc="Time to assert new data with strobe signal (s)",
                                   default_value=0.005)
 
+    delay_step = device_property(dtype=float,
+                                 doc="Delay offset time step size (ps)",
+                                 default_value=23.0)
+
     def init_device(self):
         self.debug_stream("In init_device:")
         Device.init_device(self)
@@ -106,7 +124,7 @@ class CoincidenceDS(Device):
                                                    mode_pins=self.mode_pins,
                                                    strobe_pin=self.strobe_pin,
                                                    strobe_time=self.strobe_time)
-
+        self.controller.set_avg_phase_advance(self.delay_step * 1e-12)
         self.set_state(pt.DevState.ON)
 
     def get_bucket(self):
@@ -115,7 +133,10 @@ class CoincidenceDS(Device):
 
     def set_bucket(self, new_bucket):
         self.debug_stream("In set_bucket: New bucket " + str(new_bucket))
-        self.controller.set_bucket(new_bucket)
+        try:
+            self.controller.set_bucket(new_bucket)
+        except ValueError:
+            raise 
 
     def get_timewindow(self):
         self.debug_stream("In get_time_window:")
@@ -141,14 +162,22 @@ class CoincidenceDS(Device):
         self.debug_stream("In set_ring_rf: New RF {0}".format(new_ring_rf.upper()))
         self.controller.set_ring_rf_source(new_ring_rf)
 
-    def get_offset(self):
-        self.debug_stream("In get_offset:")
-        return self.controller.get_offset(), time.time(), pt.AttrQuality.ATTR_VALID
+    def get_offset_fine(self):
+        self.debug_stream("In get_offset_fine:")
+        return self.controller.get_offset_fine(), time.time(), pt.AttrQuality.ATTR_VALID
 
-    def set_offset(self, new_offset):
-        self.debug_stream("In set_offset: New offset {0} ps".format(new_offset))
-        self.controller.set_offset(new_offset)
-        
+    def set_offset_fine(self, new_offset):
+        self.debug_stream("In set_offset_fine: New offset {0} taps".format(new_offset))
+        self.controller.set_offset_fine(new_offset)
+
+    def get_offset_coarse(self):
+        self.debug_stream("In get_offset_coarse:")
+        return self.controller.get_offset_coarse(), time.time(), pt.AttrQuality.ATTR_VALID
+
+    def set_offset_coarse(self, new_offset):
+        self.debug_stream("In set_offset_coarse: New offset {0} x 2.5 ns".format(new_offset))
+        self.controller.set_offset_coarse(new_offset)
+
 
 if __name__ == "__main__":
     pt.server.server_run((CoincidenceDS,))

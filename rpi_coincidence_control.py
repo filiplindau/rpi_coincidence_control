@@ -47,7 +47,7 @@ class GPIODummy(object):
 
 try:
     import RPi.GPIO as gpio
-except ModuleNotFoundError:
+except ImportError:
     gpio = GPIODummy()
 
 
@@ -106,7 +106,8 @@ class RPiCoincidenceController(object):
 
         self.strobe_time = strobe_time
         self.laser_freq = 2998.5e6 / 39
-        self.quad_time = 1 / self.laser_freq / 4
+        self.rev_freq = 100e6 / 176
+        self.quad_time = 1 / self.rev_freq / 4
 
         # Generate array of possible delays
         self.delay_bin = np.array([16, 77, 140, 166, 231, 292, 343, 424])
@@ -124,14 +125,15 @@ class RPiCoincidenceController(object):
 
         self.attr_lock = threading.Lock()
 
-        self.target = 0
+        self.target_bucket = 0
         self.window = 0
         self.laser_trig = 0
         self.ring_rf = 0
-        self.offset = 0
-        self.set_bucket(self.target)
+        self.offset_fine = 0
+        self.offset_coarse = 0
+        self.set_bucket(self.target_bucket)
         self.set_window(self.window)
-        self.set_offset(self.offset)
+        self.set_offset_fine(self.offset_fine)
         self.set_ring_rf_source("REV_CLOCK")
         self.set_laser_trig("COINCIDENCE")
 
@@ -161,15 +163,19 @@ class RPiCoincidenceController(object):
         time.sleep(self.strobe_time)
         gpio.output(self.pin_dict["strobe"], 0)
 
-    def set_bucket(self, target):
-        root.info("Selecting bucket {0}".format(target))
+    def set_bucket(self, target_bucket):
+        root.info("Selecting bucket {0}".format(target_bucket))
         with self.attr_lock:
-            self._write_byte(target, self.mode_dict["bucket"])
-            self.target = target
+            offset = target_bucket * 4 + self.offset_coarse
+            if offset > 255:
+                root.error("Target bucket {0} out of range, resulting offset {1}".format(target_bucket, offset))
+                raise ValueError("Target bucket {0} out of range, resulting offset {1}".format(target_bucket, offset))
+            self._write_byte(offset, self.mode_dict["bucket"])
+            self.target_bucket = target_bucket
 
     def get_bucket(self):
         with self.attr_lock:
-            target = self.target
+            target = self.target_bucket
         return target
 
     def write_window_raw(self, delay_bin):
@@ -249,41 +255,60 @@ class RPiCoincidenceController(object):
         else:
             return "100MHZ"
 
-    def set_offset(self, offset):
+    def set_offset_fine(self, offset):
         root.info("Setting offset {0}".format(offset))
         with self.attr_lock:
             # See which phase quadrature we should select for coarse phase adjustment:
-            quad_offset = np.uint8(offset // self.quad_time)
-            quad_offset = np.uint8(round(offset / self.quad_time))
-            if quad_offset < 0 or quad_offset > 4:
-                raise ValueError("Offset out of range")
-            if quad_offset == 4:
-                quad_offset = 3     # See if we can make it work with 270 deg quadrature anyway
-            # See which phase counter value we need for the fine adjustment:
-            phase_offset_count = np.int((offset - quad_offset * self.quad_time) / self.phase_adv)
-            if abs(phase_offset_count) > 150:
-                raise ValueError("Offset out of range")
-            delta_phase = phase_offset_count - self.current_phase_counter
+            # quad_offset = np.uint8(offset // self.quad_time)
+            # quad_offset = np.uint8(round(offset / self.quad_time))
+            # if quad_offset < 0 or quad_offset > 4:
+            #     raise ValueError("Offset out of range")
+            # if quad_offset == 4:
+            #     quad_offset = 3     # See if we can make it work with 270 deg quadrature anyway
+            # # See which phase counter value we need for the fine adjustment:
+            # phase_offset_count = np.int((offset - quad_offset * self.quad_time) / self.phase_adv)
+            # if abs(phase_offset_count) > 256:
+            #     raise ValueError("Offset out of range")
+            delta_phase = offset - self.current_phase_counter
+            if offset < 0 or delta_phase > 255:
+                root.error("Fine offset {0} out of range".format(offset))
+                raise ValueError("Fine offset {0} out of range".format(offset))
 
-            root.debug("Quadrature: {0}".format(quad_offset))
-            root.debug("Phase counter: {0}".format(phase_offset_count))
+            # root.debug("Quadrature: {0}".format(quad_offset))
+            # root.debug("Phase counter: {0}".format(phase_offset_count))
             root.debug("Phase counter delta: {0}".format(delta_phase))
 
             # Do the phase write sequence:
             self._write_byte(np.uint8(1), self.mode_dict["pause_trig"])         # Pause trig
-            if delta_phase > 0:                                                 # Write how to move the phase counter
+            if delta_phase > 0:                                                 # Write inc/dec phase counter
                 self._write_byte(np.uint8(delta_phase), self.mode_dict["inc_phase"])
             else:
                 self._write_byte(np.uint8(-delta_phase), self.mode_dict["dec_phase"])
-            self._write_byte(quad_offset, self.mode_dict["quadrature"])         # Write quadrature selector
-            self._write_byte(np.uint8(0), self.mode_dict["pause_trig"])         # Turn trig back on
-            self.offset = quad_offset * self.quad_time + phase_offset_count * self.phase_adv
-            self.current_phase_counter = phase_offset_count
-            return self.offset
+            # self._write_byte(quad_offset, self.mode_dict["quadrature"])         # Write quadrature selector
+            # self._write_byte(np.uint8(0), self.mode_dict["pause_trig"])         # Turn trig back on
+            self.offset_fine = offset
+            self.current_phase_counter = offset
+            return self.offset_fine
 
-    def get_offset(self):
+    def get_offset_fine(self):
         with self.attr_lock:
-            offset = self.offset
+            offset = self.offset_fine
+        return offset
+
+    def set_offset_coarse(self, offset_coarse):
+        root.info("Setting coarse offset {0}".format(offset_coarse))
+        with self.attr_lock:
+            offset = offset_coarse + self.target_bucket * 4
+            if offset > 255:
+                root.error("Coarse offset {0} out of range, resulting offset {1}".format(offset_coarse, offset))
+                raise ValueError("Coarse offset {0} out of range, resulting offset {1}".format(offset_coarse, offset))
+
+            self._write_byte(offset_coarse, self.mode_dict["bucket"])
+            self.offset_coarse = offset_coarse
+
+    def get_offset_coarse(self):
+        with self.attr_lock:
+            offset = self.offset_coarse
         return offset
 
     def set_avg_phase_advance(self, phase_adv):
