@@ -94,6 +94,28 @@ class CoincidenceDS(Device):
                         memorized=True,
                         hw_memorized=True)
 
+    outdelay_linac = attribute(label="Linac trig outdelay",
+                               dtype=float,
+                               access=pt.AttrWriteType.READ_WRITE,
+                               unit="s",
+                               format="%9.8f",
+                               fget="get_outdelay_linac",
+                               fset="set_outdelay_linac",
+                               doc="Linac trig output delay in seconds. Minimum step size is 13 ns.",
+                               memorized=True,
+                               hw_memorized=True)
+
+    outdelay_laser = attribute(label="Laser trig outdelay",
+                               dtype=float,
+                               access=pt.AttrWriteType.READ_WRITE,
+                               unit="s",
+                               format="%9.8f",
+                               fget="get_outdelay_laser",
+                               fset="set_outdelay_laser",
+                               doc="Laser trig output delay in seconds. Minimum step size is 13 ns.",
+                               memorized=True,
+                               hw_memorized=True)
+
     data_pins = device_property(dtype=pt.DevVarShortArray,
                                 doc="RPi pin numbers of the 8 data bits for FPGA transfer",
                                 default_value=[29, 31, 33, 35, 37, 40, 38, 36])
@@ -177,6 +199,32 @@ class CoincidenceDS(Device):
     def set_offset_coarse(self, new_offset):
         self.debug_stream("In set_offset_coarse: New offset {0} x 2.5 ns".format(new_offset))
         self.controller.set_offset_coarse(new_offset)
+
+    def get_outdelay_linac(self):
+        self.debug_stream("In get_outdelay_linac:")
+        dt = 1 / (2998.5e6 / 39)
+        outdelay = dt * self.controller.get_outdelay_linac()
+        return outdelay, time.time(), pt.AttrQuality.ATTR_VALID
+
+    def set_outdelay_linac(self, new_delay):
+        dt = 1 / (2998.5e6 / 39)
+        outdelay_count = int(new_delay / dt)
+        self.debug_stream("In set_outdelay_linac: New delay {0} s, {1} counts".format(outdelay_count*dt,
+                                                                                      outdelay_count))
+        self.controller.set_outdelay_linac(outdelay_count)
+
+    def get_outdelay_laser(self):
+        self.debug_stream("In get_outdelay_laser:")
+        dt = 1 / (2998.5e6 / 39)
+        outdelay = dt * self.controller.get_outdelay_laser()
+        return outdelay, time.time(), pt.AttrQuality.ATTR_VALID
+
+    def set_outdelay_laser(self, new_delay):
+        dt = 1 / (2998.5e6 / 39)
+        outdelay_count = int(new_delay / dt)
+        self.debug_stream("In set_outdelay_laser: New delay {0} s, {1} counts".format(outdelay_count*dt,
+                                                                                      outdelay_count))
+        self.controller.set_outdelay_laser(outdelay_count)
 
 
 if __name__ == "__main__":

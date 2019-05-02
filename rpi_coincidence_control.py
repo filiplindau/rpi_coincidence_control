@@ -95,14 +95,15 @@ class RPiCoincidenceController(object):
         self.pin_list.append(self.pin_dict["mode3"])
 
         self.mode_dict = dict()
-        self.mode_dict["inc_phase"] = 1
-        self.mode_dict["dec_phase"] = 2
-        self.mode_dict["quadrature"] = 3
-        self.mode_dict["pause_trig"] = 4
-        self.mode_dict["bucket"] = 5
-        self.mode_dict["window"] = 6
-        self.mode_dict["laser_trig_source"] = 7
-        self.mode_dict["ring_rf_source"] = 8
+        self.mode_dict["inc_iodelay"] = 0b0001
+        self.mode_dict["dec_iodelay"] = 0b0010
+        self.mode_dict["outdelay_2hz"] = 0b0011
+        self.mode_dict["outdelay_20hz"] = 0b0100
+        self.mode_dict["bucket"] = 0b0101
+        self.mode_dict["window"] = 0b0110
+        self.mode_dict["laser_trig_source"] = 0b0111
+        self.mode_dict["ring_rf_source"] = 0b1000
+        self.mode_dict["pause_trig"] = 0b1001
 
         self.strobe_time = strobe_time
         self.laser_freq = 2998.5e6 / 39
@@ -131,6 +132,8 @@ class RPiCoincidenceController(object):
         self.ring_rf = 0
         self.offset_fine = 0
         self.offset_coarse = 0
+        self.outdelay_2hz = 0
+        self.outdelay_20hz = 0
         self.set_bucket(self.target_bucket)
         self.set_window(self.window)
         self.set_offset_fine(self.offset_fine)
@@ -256,7 +259,7 @@ class RPiCoincidenceController(object):
             return "100MHZ"
 
     def set_offset_fine(self, offset):
-        root.info("Setting offset {0}".format(offset))
+        root.info("Setting fine offset (IODelay) to {0}".format(offset))
         with self.attr_lock:
             # See which phase quadrature we should select for coarse phase adjustment:
             # quad_offset = np.uint8(offset // self.quad_time)
@@ -270,7 +273,7 @@ class RPiCoincidenceController(object):
             # if abs(phase_offset_count) > 256:
             #     raise ValueError("Offset out of range")
             delta_phase = offset - self.current_phase_counter
-            if offset < 0 or delta_phase > 255:
+            if offset < 0 or offset > 255:
                 root.error("Fine offset {0} out of range".format(offset))
                 raise ValueError("Fine offset {0} out of range".format(offset))
 
@@ -280,12 +283,13 @@ class RPiCoincidenceController(object):
 
             # Do the phase write sequence:
             self._write_byte(np.uint8(1), self.mode_dict["pause_trig"])         # Pause trig
+            # self._write_byte(np.uint8(offset), self.mode_dict["iodelay"])
             if delta_phase > 0:                                                 # Write inc/dec phase counter
-                self._write_byte(np.uint8(delta_phase), self.mode_dict["inc_phase"])
+                self._write_byte(np.uint8(delta_phase), self.mode_dict["inc_iodelay"])
             else:
-                self._write_byte(np.uint8(-delta_phase), self.mode_dict["dec_phase"])
+                self._write_byte(np.uint8(-delta_phase), self.mode_dict["dec_iodelay"])
             # self._write_byte(quad_offset, self.mode_dict["quadrature"])         # Write quadrature selector
-            # self._write_byte(np.uint8(0), self.mode_dict["pause_trig"])         # Turn trig back on
+            self._write_byte(np.uint8(0), self.mode_dict["pause_trig"])         # Turn trig back on
             self.offset_fine = offset
             self.current_phase_counter = offset
             return self.offset_fine
@@ -315,6 +319,42 @@ class RPiCoincidenceController(object):
         with self.attr_lock:
             self.phase_adv = phase_adv
 
+    def set_outdelay_linac(self, delay_count):
+        with self.attr_lock:
+            low = np.uint8(delay_count % 256)
+            high = np.uint8(delay_count / 256)
+            addr = self.mode_dict["outdelay_2hz"]
+            root.info("Setting linac outdelay to low {1}, high {2}".format(addr, low, high))
+            self._write_byte(np.uint8(1), self.mode_dict["pause_trig"])
+            self._write_byte(low, addr)
+            time.sleep(0.001)
+            self._write_byte(high, addr)
+            self._write_byte(np.uint8(0), self.mode_dict["pause_trig"])
+            self.outdelay_2hz = delay_count
+
+    def get_outdelay_linac(self):
+        with self.attr_lock:
+            outdelay = self.outdelay_2hz
+        return outdelay
+
+    def set_outdelay_laser(self, delay_count):
+        with self.attr_lock:
+            low = np.uint8(delay_count % 256)
+            high = np.uint8(delay_count / 256)
+            addr = self.mode_dict["outdelay_20hz"]
+            root.info("Setting laser outdelay to low {1}, high {2}".format(addr, low, high))
+            self._write_byte(np.uint8(1), self.mode_dict["pause_trig"])
+            self._write_byte(low, addr)
+            time.sleep(0.001)
+            self._write_byte(high, addr)
+            self._write_byte(np.uint8(0), self.mode_dict["pause_trig"])
+            self.outdelay_20hz = delay_count
+
+    def get_outdelay_laser(self):
+        with self.attr_lock:
+            outdelay = self.outdelay_20hz
+        return outdelay
+
 
 if __name__ == "__main__":
-    rpc = RPiCoincidenceController(strobe_time=0.1)
+    rpc = RPiCoincidenceController(strobe_time=0.001)
